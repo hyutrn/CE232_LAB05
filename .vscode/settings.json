@@ -29,6 +29,8 @@
         "array": "c",
         "string": "c",
         "string_view": "c",
-        "ets_sys.h": "c"
+        "ets_sys.h": "c",
+        "dht11.h": "c",
+        "oled1306.h": "c"
     }
 }

@@ -22,9 +22,18 @@
 #include "esp_log.h"
 #include "mqtt_client.h"
 #include "dht11.h"
+#include "oled1306.h"
 
 static const char *TAG = "MQTT_DHT";
 esp_mqtt_client_handle_t client; // Biến toàn cục để lưu trữ client MQTT
+
+#define SECRET_MQTT_ADDRESS_URL "mqtt://mqtt3.thingspeak.com"
+#define SECRET_MQTT_USERNAME "Kh09KhczPSwyBgU3KhMzDyM"
+#define SECRET_MQTT_CLIENT_ID "Kh09KhczPSwyBgU3KhMzDyM"
+#define SECRET_MQTT_PASSWORD "4PpuUC9tYmX/P7RpJcXYa+1T"
+#define MQTT_PUBLISH_TOPIC "channels/2188986/publish/fields/field1"
+#define MQTT_SUBSCRIBE_TOPIC "channels/2188986/subscribe/fields/field"
+#define SECRET_MQTT_QoS 0
 
 static void log_error_if_nonzero(const char *message, int error_code)
 {
@@ -37,20 +46,16 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     ESP_LOGD(TAG, "Event dispatched from event loop base=%s, event_id=%d", base, event_id);
     esp_mqtt_event_handle_t event = event_data;
     esp_mqtt_client_handle_t client = event->client;
-    int msg_id;
+    //int msg_id;
     switch ((esp_mqtt_event_id_t)event_id) {
     case MQTT_EVENT_CONNECTED:
         ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
-        msg_id = esp_mqtt_client_publish(client, "/topic/qos1", "Connected", 0, 0, 0);
-        ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
         break;
     case MQTT_EVENT_DISCONNECTED:
         ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
         break;
     case MQTT_EVENT_SUBSCRIBED:
         ESP_LOGI(TAG, "MQTT_EVENT_SUBSCRIBED, msg_id=%d", event->msg_id);
-        msg_id = esp_mqtt_client_publish(client, "/topic/qos0", "data_test", 0, 0, 0);
-        ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
         break;
     case MQTT_EVENT_UNSUBSCRIBED:
         ESP_LOGI(TAG, "MQTT_EVENT_UNSUBSCRIBED, msg_id=%d", event->msg_id);
@@ -81,12 +86,13 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
 static void mqtt_app_start(void)
 {
     esp_mqtt_client_config_t mqtt_cfg = {
-        .broker.address.uri = CONFIG_BROKER_URL,
-        .broker.address.hostname = CONFIG_BROKER_URL,
+        .broker.address.uri = SECRET_MQTT_ADDRESS_URL,
+        .broker.address.hostname = SECRET_MQTT_ADDRESS_URL,
         .broker.address.port = 1883,
-        .credentials.username = "kPcgidpKCNw8zPdkdyL74gSvlHg0wvvE8xKgyYP0BbYYOZ6RmIMgOszX0GNkZ6OY",
-        .credentials.client_id = "esp",
-        .credentials.authentication.password = NULL,
+        .credentials.username = SECRET_MQTT_USERNAME,
+        .credentials.client_id = SECRET_MQTT_CLIENT_ID,
+        .credentials.authentication.password = SECRET_MQTT_PASSWORD,
+        .session.last_will.qos = SECRET_MQTT_QoS,
     };
 
     client = esp_mqtt_client_init(&mqtt_cfg); // Gán giá trị cho biến client
@@ -97,7 +103,7 @@ static void mqtt_app_start(void)
 void app_main(void)
 {
     DHT11_init(GPIO_NUM_4);
-
+    oled_init();    //khoi tao oled
     ESP_LOGI(TAG, "[APP] Startup..");
     ESP_LOGI(TAG, "[APP] Free memory: %d bytes", esp_get_free_heap_size());
     ESP_LOGI(TAG, "[APP] IDF version: %s", esp_get_idf_version());
@@ -116,23 +122,20 @@ void app_main(void)
     ESP_ERROR_CHECK(example_connect());
 
     mqtt_app_start();
-    /*
-    while(1) {
-        printf("Temperature is %d \n", DHT11_read().temperature);
-        printf("Humidity is %d\n", DHT11_read().humidity);
-        printf("Status code is %d\n", DHT11_read().status);
-        vTaskDelay(10000 / portTICK_PERIOD_MS);
-    }
-    */
     while (1) {
         if (client != NULL) { // Kiểm tra client đã khởi tạo hay chưa
-            printf("Temperature is %d \n", DHT11_read().temperature);
-            printf("Humidity is %d\n", DHT11_read().humidity);
+            int temp = DHT11_read().temperature;
+            //gui du lieu len broker
             char payload[32];
-            snprintf(payload, sizeof(payload), "%d, %d", DHT11_read().temperature, DHT11_read().humidity);
-            esp_mqtt_client_publish(client, "topic/qos0", payload, 0, 0, 0);
+            sprintf(payload, "%d",temp);
+            //Hien thi oled
+            char text[20] = "";
+            sprintf(text, "Nhiet do la: %d", temp);
+            oled(text);
+            printf("Temperature is %d \n", temp);
+            esp_mqtt_client_publish(client, MQTT_PUBLISH_TOPIC, payload, 0, 0, 0);
             ESP_LOGI(TAG, "MQTT DATA SENT SUCCESSFULL");
         }
-        vTaskDelay(1000 / portTICK_PERIOD_MS);  // Delay 10s
+        vTaskDelay(10000 / portTICK_PERIOD_MS);  // Delay 10s
     }
 }
